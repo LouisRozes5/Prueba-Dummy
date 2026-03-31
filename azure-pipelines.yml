@@ -9,14 +9,56 @@ trigger:
 pool:
   name: Default
 
-steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '20.x'
-  displayName: 'Install Node.js'
+stages:
+- stage: Build
+  displayName: 'Build'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Vue App'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '20.x'
+      displayName: 'Install Node.js'
 
-- script: |
-    cd vuejs
-    npm install
-    npm run build
-  displayName: 'npm install and build'
+    - script: |
+        cd vuejs
+        npm install
+        npm run build
+      displayName: 'npm install and build'
+
+- stage: CodeAnalysis
+  displayName: 'Code Analysis'
+  dependsOn: Build
+  jobs:
+  - job: SonarQubeJob
+    displayName: 'SonarQube Analysis'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '20.x'
+      displayName: 'Install Node.js'
+
+    - task: SonarQubePrepare@7
+      displayName: 'Prepare SonarQube Analysis'
+      inputs:
+        SonarQube: 'SonarQube'
+        scannerMode: 'CLI'
+        configMode: 'manual'
+        cliProjectKey: 'Prueba-Dummy'
+        cliProjectName: 'Prueba-Dummy'
+        cliSources: 'vuejs/src'
+
+    - script: |
+        cd vuejs
+        npm install
+        npm run build
+      displayName: 'npm install and build'
+
+    - task: SonarQubeAnalyze@7
+      displayName: 'Run SonarQube Analysis'
+
+    - task: SonarQubePublish@7
+      displayName: 'Publish Quality Gate Result'
+      inputs:
+        pollingTimeoutSec: '300'
