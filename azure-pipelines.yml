@@ -21,6 +21,10 @@ variables:
   sonarHostUrl: 'http://localhost:9000'
   imageRepository: 'prueba-dummy'
   tag: '$(Build.BuildId)'
+  acrName: 'pruebadummyacr'
+  acrLoginServer: 'pruebadummyacr.azurecr.io'
+  aksResourceGroup: 'prueba-dummy-rg'
+  aksClusterName: 'prueba-dummy-aks'
 
 pool:
   name: Default
@@ -91,19 +95,63 @@ stages:
         SONAR_TOKEN: $(SONAR_TOKEN)
 
 - stage: DockerBuild
-  displayName: 'Docker Build'
+  displayName: 'Docker Build & Push to ACR'
   dependsOn: CodeAnalysis
   condition: succeeded('CodeAnalysis')
   jobs:
   - job: DockerJob
-    displayName: 'Build Docker Image (local)'
+    displayName: 'Build and Push to Azure Container Registry'
     timeoutInMinutes: 20
     steps:
     - checkout: self
       displayName: 'Checkout source code'
 
-    - script: docker build -t $(imageRepository):$(tag) -t $(imageRepository):latest vuejs/
-      displayName: 'Build Docker image'
+    - task: AzureCLI@2
+      displayName: 'Build and Push image to ACR'
+      inputs:
+        azureSubscription: 'azure-connection'
+        scriptType: 'pscore'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az acr build --registry $(acrName) --image $(imageRepository):$(tag) --image $(imageRepository):latest $(workingDir)/
 
-    - script: docker images $(imageRepository)
-      displayName: 'Verificar imagen generada'
+- stage: Deploy
+  displayName: 'Deploy to AKS'
+  dependsOn: DockerBuild
+  condition: succeeded('DockerBuild')
+  jobs:
+  - job: DeployJob
+    displayName: 'Deploy to AKS with Kustomize'
+    timeoutInMinutes: 30
+    steps:
+    - checkout: self
+      displayName: 'Checkout source code'
+
+    - task: AzureCLI@2
+      displayName: 'Install NGINX Ingress Controller'
+      inputs:
+        azureSubscription: 'azure-connection'
+        scriptType: 'pscore'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az aks get-credentials --resource-group $(aksResourceGroup) --name $(aksClusterName) --overwrite-existing
+          $ns = kubectl get ns ingress-nginx --ignore-not-found
+          if (-not $ns) {
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
+            kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=180s
+          }
+
+    - task: AzureCLI@2
+      displayName: 'Deploy app with Kustomize'
+      inputs:
+        azureSubscription: 'azure-connection'
+        scriptType: 'pscore'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az aks get-credentials --resource-group $(aksResourceGroup) --name $(aksClusterName) --overwrite-existing
+          (Get-Content environment/k8s/overlays/production/kustomization.yaml) -replace 'pruebadummyacr.azurecr.io', '$(acrLoginServer)' -replace "newTag: latest", "newTag: '$(tag)'" | Set-Content environment/k8s/overlays/production/kustomization.yaml
+          kubectl apply -k environment/k8s/overlays/production/
+          kubectl rollout status deployment/prueba-dummy --timeout=120s
+          $ip = kubectl get ingress prueba-dummy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+          Write-Host "##vso[task.setvariable variable=APP_URL]http://$ip"
+          Write-Host "App disponible en: http://$ip"
