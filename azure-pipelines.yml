@@ -19,6 +19,8 @@ variables:
   workingDir: 'vuejs'
   sonarProjectKey: 'Prueba-Dummy'
   sonarHostUrl: 'http://localhost:9000'
+  imageRepository: 'prueba-dummy'
+  tag: '$(Build.BuildId)'
 
 pool:
   name: Default
@@ -87,3 +89,21 @@ stages:
       workingDirectory: $(workingDir)
       env:
         SONAR_TOKEN: $(SONAR_TOKEN)
+
+- stage: DockerBuild
+  displayName: 'Docker Build'
+  dependsOn: CodeAnalysis
+  condition: succeeded('CodeAnalysis')
+  jobs:
+  - job: DockerJob
+    displayName: 'Build Docker Image (local)'
+    timeoutInMinutes: 20
+    steps:
+    - checkout: self
+      displayName: 'Checkout source code'
+
+    - script: docker build -t $(imageRepository):$(tag) -t $(imageRepository):latest vuejs/
+      displayName: 'Build Docker image'
+
+    - script: docker images $(imageRepository)
+      displayName: 'Verificar imagen generada'
