@@ -76,12 +76,15 @@ stages:
       workingDirectory: $(workingDir)
 
     - powershell: |
-        npx sonar-scanner `
-          -Dsonar.projectKey=$(sonarProjectKey) `
-          -Dsonar.projectName=$(sonarProjectKey) `
-          -Dsonar.sources=src `
-          -Dsonar.host.url=$(sonarHostUrl) `
-          -Dsonar.token=$env:SONAR_TOKEN
+        $props = @"
+sonar.projectKey=$(sonarProjectKey)
+sonar.projectName=$(sonarProjectKey)
+sonar.sources=src
+sonar.host.url=$(sonarHostUrl)
+sonar.token=$env:SONAR_TOKEN
+"@
+        Set-Content -Path sonar-project.properties -Value $props -Encoding UTF8
+        npx sonar-scanner
       displayName: 'Run SonarQube Analysis'
       workingDirectory: $(workingDir)
       env:
