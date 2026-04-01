@@ -81,6 +81,8 @@ stages:
           -Dsonar.projectName=$(sonarProjectKey) `
           -Dsonar.sources=src `
           -Dsonar.host.url=$(sonarHostUrl) `
-          -Dsonar.token=$(SONAR_TOKEN)
+          -Dsonar.token=$env:SONAR_TOKEN
       displayName: 'Run SonarQube Analysis'
       workingDirectory: $(workingDir)
+      env:
+        SONAR_TOKEN: $(SONAR_TOKEN)
