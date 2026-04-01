@@ -1,10 +1,24 @@
-# Node.js with Vue
-# Build a Node.js project that uses Vue.
-# Add steps that analyze code, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+# Vue.js CI Pipeline
+# Build, test and analyze code quality with SonarQube
 
 trigger:
-- main
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '*.md'
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  nodeVersion: '20.x'
+  workingDir: 'vuejs'
+  sonarProjectKey: 'Prueba-Dummy'
+  sonarHostUrl: 'http://localhost:9000'
 
 pool:
   name: Default
@@ -14,51 +28,59 @@ stages:
   displayName: 'Build'
   jobs:
   - job: BuildJob
-    displayName: 'Build Vue App'
+    displayName: 'Build Vue Application'
+    timeoutInMinutes: 15
     steps:
-    - task: NodeTool@0
-      inputs:
-        versionSpec: '20.x'
-      displayName: 'Install Node.js'
+    - checkout: self
+      displayName: 'Checkout source code'
 
-    - script: |
-        cd vuejs
-        npm install
-        npm run build
-      displayName: 'npm install and build'
+    - task: NodeTool@0
+      displayName: 'Install Node.js $(nodeVersion)'
+      inputs:
+        versionSpec: $(nodeVersion)
+
+    - script: npm install
+      displayName: 'Install dependencies'
+      workingDirectory: $(workingDir)
+
+    - script: npm run build
+      displayName: 'Build application'
+      workingDirectory: $(workingDir)
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish build artifacts'
+      inputs:
+        PathtoPublish: '$(workingDir)/dist'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
 
 - stage: CodeAnalysis
   displayName: 'Code Analysis'
   dependsOn: Build
+  condition: succeeded('Build')
   jobs:
   - job: SonarQubeJob
-    displayName: 'SonarQube Analysis'
+    displayName: 'SonarQube Static Analysis'
+    timeoutInMinutes: 20
     steps:
+    - checkout: self
+      displayName: 'Checkout source code'
+
     - task: NodeTool@0
+      displayName: 'Install Node.js $(nodeVersion)'
       inputs:
-        versionSpec: '20.x'
-      displayName: 'Install Node.js'
+        versionSpec: $(nodeVersion)
 
-    - task: SonarQubePrepare@7
-      displayName: 'Prepare SonarQube Analysis'
-      inputs:
-        SonarQube: 'SonarQube'
-        scannerMode: 'CLI'
-        configMode: 'manual'
-        cliProjectKey: 'Prueba-Dummy'
-        cliProjectName: 'Prueba-Dummy'
-        cliSources: 'vuejs/src'
+    - script: npm install
+      displayName: 'Install dependencies'
+      workingDirectory: $(workingDir)
 
-    - script: |
-        cd vuejs
-        npm install
-        npm run build
-      displayName: 'npm install and build'
-
-    - task: SonarQubeAnalyze@7
+    - powershell: |
+        npx sonar-scanner `
+          -Dsonar.projectKey=$(sonarProjectKey) `
+          -Dsonar.projectName=$(sonarProjectKey) `
+          -Dsonar.sources=src `
+          -Dsonar.host.url=$(sonarHostUrl) `
+          -Dsonar.token=$(SONAR_TOKEN)
       displayName: 'Run SonarQube Analysis'
-
-    - task: SonarQubePublish@7
-      displayName: 'Publish Quality Gate Result'
-      inputs:
-        pollingTimeoutSec: '300'
+      workingDirectory: $(workingDir)
