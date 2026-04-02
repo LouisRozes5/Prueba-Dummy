@@ -3,6 +3,8 @@
 // Este archivo se elimina en el escenario "exitoso"
 // ===================================================
 
+/*
+
 // BUG 1: Variable usada antes de ser declarada (null pointer)
 function getUserName(user) {
   return user.name.toUpperCase(); // bug: no valida si user o user.name es null
@@ -25,6 +27,9 @@ function divide(a, b) {
 }
 
 // BUG 4: Variable declarada pero nunca usada
+
 const unusedVariable = "esto nunca se usa";
 
 export { getUserName, isAdmin, divide };
+
+*/
