@@ -60,10 +60,44 @@ stages:
         ArtifactName: 'drop'
         publishLocation: 'Container'
 
-- stage: CodeAnalysis
-  displayName: 'Code Analysis'
+- stage: Scripts
+  displayName: 'Scripts Paralelos'
   dependsOn: Build
   condition: succeeded('Build')
+  jobs:
+  - job: HolaMundoJob
+    displayName: 'a) Imprimir Hola Mundo 10 veces'
+    steps:
+    - powershell: |
+        for ($i = 1; $i -le 10; $i++) {
+          Write-Host "Hola Mundo $i"
+        }
+      displayName: 'Imprimir Hola Mundo 10 veces'
+
+  - job: FilesJob
+    displayName: 'b) Crear 10 archivos con fecha'
+    steps:
+    - powershell: |
+        $outputDir = "$(Agent.TempDirectory)\archivos_fecha"
+        New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+        for ($i = 1; $i -le 10; $i++) {
+          $fecha = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+          $filename = "archivo_$i.txt"
+          $filepath = Join-Path $outputDir $filename
+          Set-Content -Path $filepath -Value $fecha
+          Write-Host "[$filename] -> $fecha"
+        }
+        Write-Host "---"
+        Write-Host "Contenido de los 10 archivos:"
+        Get-ChildItem $outputDir | ForEach-Object {
+          Write-Host "$($_.Name): $(Get-Content $_.FullName)"
+        }
+      displayName: 'Crear y mostrar 10 archivos con fecha'
+
+- stage: CodeAnalysis
+  displayName: 'Code Analysis'
+  dependsOn: Scripts
+  condition: succeeded('Scripts')
   jobs:
   - job: SonarQubeJob
     displayName: 'SonarQube Static Analysis'
