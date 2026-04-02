@@ -113,7 +113,10 @@ stages:
         scriptType: 'ps'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          az acr build --registry $(acrName) --image $(imageRepository):$(tag) --image $(imageRepository):latest $(workingDir)/
+          az acr login --name $(acrName)
+          docker build -t $(acrLoginServer)/$(imageRepository):$(tag) -t $(acrLoginServer)/$(imageRepository):latest $(workingDir)/
+          docker push $(acrLoginServer)/$(imageRepository):$(tag)
+          docker push $(acrLoginServer)/$(imageRepository):latest
 
 - stage: Deploy
   displayName: 'Deploy to AKS'
